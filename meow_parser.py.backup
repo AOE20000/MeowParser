@@ -742,622 +742,6 @@ class WindowSelector(QWidget):
                 item.setHidden(True)
 
 
-# ============================================================================
-# 配置文件管理系统（新方案）
-# ============================================================================
-
-class ConfigFileManager:
-    """配置文件管理器"""
-    
-    def __init__(self, config_dir=".kiro/rules"):
-        self.config_dir = Path(config_dir)
-        self.config_dir.mkdir(parents=True, exist_ok=True)
-        self.current_config = None
-        self.current_config_path = None
-        
-        # 确保有默认配置
-        self._ensure_default_config()
-    
-    def _ensure_default_config(self):
-        """确保存在默认配置"""
-        default_path = self.config_dir / "default.json"
-        if not default_path.exists():
-            from datetime import datetime
-            default_config = {
-                "name": "喵语转换（默认）",
-                "version": "1.0.0",
-                "description": "将文本转换为可爱的喵语",
-                "author": "MeowParser",
-                "created": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                "updated": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                "groups": [
-                    {
-                        "name": "喵语转换",
-                        "description": "在标点前添加喵",
-                        "collapsed": False,
-                        "rules": [
-                            {
-                                "enabled": True,
-                                "pattern": "([^喵])([。，！？；、）（：])",
-                                "replacement": "\\1喵\\2",
-                                "is_regex": True,
-                                "description": "标点前添加喵"
-                            },
-                            {
-                                "enabled": True,
-                                "pattern": "([^喵。，！？；、）（：\\n])(\\n)",
-                                "replacement": "\\1喵\\2",
-                                "is_regex": True,
-                                "description": "换行前添加喵"
-                            },
-                            {
-                                "enabled": True,
-                                "pattern": "([^。，！？；、）（：\\n])$",
-                                "replacement": "\\1喵",
-                                "is_regex": True,
-                                "description": "句尾添加喵"
-                            }
-                        ]
-                    }
-                ]
-            }
-            
-            with open(default_path, 'w', encoding='utf-8') as f:
-                json.dump(default_config, f, ensure_ascii=False, indent=2)
-    
-    def list_configs(self):
-        """列出所有配置文件"""
-        configs = []
-        for file_path in sorted(self.config_dir.glob("*.json")):
-            try:
-                with open(file_path, 'r', encoding='utf-8') as f:
-                    config = json.load(f)
-                    configs.append({
-                        "path": file_path,
-                        "name": config.get("name", file_path.stem),
-                        "description": config.get("description", ""),
-                        "version": config.get("version", "1.0.0"),
-                        "updated": config.get("updated", ""),
-                        "rule_count": sum(len(g.get("rules", [])) for g in config.get("groups", []))
-                    })
-            except Exception as e:
-                print(f"加载配置文件失败 {file_path}: {e}")
-        return configs
-    
-    def load_config(self, config_path):
-        """加载配置文件"""
-        try:
-            with open(config_path, 'r', encoding='utf-8') as f:
-                self.current_config = json.load(f)
-                self.current_config_path = Path(config_path)
-                return True
-        except Exception as e:
-            print(f"加载配置失败: {e}")
-            return False
-    
-    def save_config(self, config_path=None):
-        """保存配置文件"""
-        if config_path is None:
-            config_path = self.current_config_path
-        
-        if config_path is None:
-            raise ValueError("未指定配置文件路径")
-        
-        try:
-            from datetime import datetime
-            # 更新时间戳
-            self.current_config["updated"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            
-            with open(config_path, 'w', encoding='utf-8') as f:
-                json.dump(self.current_config, f, ensure_ascii=False, indent=2)
-            return True
-        except Exception as e:
-            print(f"保存配置失败: {e}")
-            return False
-    
-    def create_config(self, name, description=""):
-        """创建新配置文件"""
-        from datetime import datetime
-        config = {
-            "name": name,
-            "version": "1.0.0",
-            "description": description,
-            "author": "",
-            "created": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "updated": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "groups": []
-        }
-        
-        # 生成文件名
-        safe_name = "".join(c if c.isalnum() or c in "-_" else "_" for c in name)
-        config_path = self.config_dir / f"{safe_name}.json"
-        
-        # 避免重名
-        counter = 1
-        while config_path.exists():
-            config_path = self.config_dir / f"{safe_name}_{counter}.json"
-            counter += 1
-        
-        self.current_config = config
-        self.current_config_path = config_path
-        self.save_config()
-        
-        return config_path
-    
-    def delete_config(self, config_path):
-        """删除配置文件"""
-        try:
-            # 不允许删除默认配置
-            if Path(config_path).name == "default.json":
-                return False, "不能删除默认配置"
-            
-            Path(config_path).unlink()
-            return True, "删除成功"
-        except Exception as e:
-            return False, f"删除失败: {e}"
-    
-    def get_all_rules(self):
-        """获取当前配置的所有启用规则（扁平化，按顺序）"""
-        if not self.current_config:
-            return []
-        
-        all_rules = []
-        for group in self.current_config.get("groups", []):
-            for rule in group.get("rules", []):
-                if rule.get("enabled", True):
-                    all_rules.append(rule)
-        
-        return all_rules
-    
-    def migrate_old_config(self, old_config):
-        """迁移旧配置格式"""
-        from datetime import datetime
-        new_config = {
-            "name": "迁移的配置",
-            "version": "1.0.0",
-            "description": "从旧版本迁移",
-            "author": "",
-            "created": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "updated": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "groups": []
-        }
-        
-        old_groups = old_config.get("groups", {})
-        
-        for group_name, group_data in old_groups.items():
-            # 只迁移启用的规则组
-            if not group_data.get("enabled", True):
-                continue
-            
-            new_group = {
-                "name": group_name,
-                "description": "",
-                "collapsed": False,
-                "rules": []
-            }
-            
-            for rule in group_data.get("rules", []):
-                new_rule = {
-                    "enabled": True,
-                    "pattern": rule.get("pattern", ""),
-                    "replacement": rule.get("replacement", ""),
-                    "is_regex": rule.get("is_regex", False),
-                    "description": f"{rule.get('pattern', '')} → {rule.get('replacement', '')}"
-                }
-                new_group["rules"].append(new_rule)
-            
-            new_config["groups"].append(new_group)
-        
-        return new_config
-
-
-class TextProcessor:
-    """文本处理引擎"""
-    
-    def __init__(self, config_manager):
-        self.config_manager = config_manager
-    
-    def process(self, text):
-        """处理文本 - 按规则顺序依次应用"""
-        if not text or len(text.strip()) == 0:
-            return text
-        
-        result = text
-        rules = self.config_manager.get_all_rules()
-        
-        for rule in rules:
-            pattern = rule.get("pattern", "")
-            replacement = rule.get("replacement", "")
-            is_regex = rule.get("is_regex", False)
-            
-            if not pattern:
-                continue
-            
-            try:
-                if is_regex:
-                    result = re.sub(pattern, replacement, result)
-                else:
-                    result = result.replace(pattern, replacement)
-            except re.error as e:
-                print(f"正则表达式错误 '{pattern}': {e}")
-                continue
-        
-        return result
-
-
-class RuleEditDialog(QDialog):
-    """规则编辑对话框"""
-    
-    def __init__(self, parent, rule=None):
-        super().__init__(parent)
-        self.rule = rule or {}
-        self.init_ui()
-    
-    def init_ui(self):
-        """初始化UI"""
-        self.setWindowTitle("编辑规则" if self.rule else "添加规则")
-        self.setMinimumWidth(500)
-        
-        layout = QVBoxLayout()
-        
-        # 描述
-        layout.addWidget(QLabel("描述:"))
-        self.desc_input = QLineEdit()
-        self.desc_input.setText(self.rule.get("description", ""))
-        layout.addWidget(self.desc_input)
-        
-        # 匹配文本
-        layout.addWidget(QLabel("匹配文本:"))
-        self.pattern_input = QLineEdit()
-        self.pattern_input.setText(self.rule.get("pattern", ""))
-        layout.addWidget(self.pattern_input)
-        
-        # 替换为
-        layout.addWidget(QLabel("替换为:"))
-        self.replacement_input = QLineEdit()
-        self.replacement_input.setText(self.rule.get("replacement", ""))
-        layout.addWidget(self.replacement_input)
-        
-        # 正则表达式
-        self.regex_checkbox = QCheckBox("使用正则表达式")
-        self.regex_checkbox.setChecked(self.rule.get("is_regex", False))
-        layout.addWidget(self.regex_checkbox)
-        
-        # 启用
-        self.enabled_checkbox = QCheckBox("启用此规则")
-        self.enabled_checkbox.setChecked(self.rule.get("enabled", True))
-        layout.addWidget(self.enabled_checkbox)
-        
-        # 按钮
-        button_layout = QHBoxLayout()
-        ok_btn = QPushButton("确定")
-        ok_btn.clicked.connect(self.accept)
-        button_layout.addWidget(ok_btn)
-        
-        cancel_btn = QPushButton("取消")
-        cancel_btn.clicked.connect(self.reject)
-        button_layout.addWidget(cancel_btn)
-        
-        layout.addLayout(button_layout)
-        self.setLayout(layout)
-    
-    def accept(self):
-        """验证并接受"""
-        pattern = self.pattern_input.text()
-        is_regex = self.regex_checkbox.isChecked()
-        
-        if not pattern:
-            QMessageBox.warning(self, "错误", "匹配文本不能为空")
-            return
-        
-        # 验证正则表达式
-        if is_regex:
-            try:
-                re.compile(pattern)
-            except re.error as e:
-                QMessageBox.warning(self, "正则表达式错误", f"无效的正则表达式:\n{str(e)}")
-                return
-        
-        super().accept()
-    
-    def get_result(self):
-        """获取结果"""
-        return {
-            "enabled": self.enabled_checkbox.isChecked(),
-            "pattern": self.pattern_input.text(),
-            "replacement": self.replacement_input.text(),
-            "is_regex": self.regex_checkbox.isChecked(),
-            "description": self.desc_input.text() or f"{self.pattern_input.text()} → {self.replacement_input.text()}"
-        }
-
-
-class ConfigFileEditor(QWidget):
-    """配置文件编辑器"""
-    
-    def __init__(self, parent, config_manager, save_callback):
-        super().__init__(parent)
-        self.config_manager = config_manager
-        self.save_callback = save_callback
-        self.init_ui()
-    
-    def init_ui(self):
-        """初始化UI"""
-        self.setWindowTitle("替换规则管理")
-        self.setGeometry(100, 100, 900, 600)
-        self.setWindowFlags(Qt.WindowType.Window)
-        
-        layout = QVBoxLayout()
-        
-        # 配置文件选择器
-        config_layout = QHBoxLayout()
-        config_layout.addWidget(QLabel("当前配置:"))
-        
-        self.config_combo = QComboBox()
-        self.config_combo.setMinimumWidth(300)
-        self.config_combo.currentIndexChanged.connect(self.on_config_changed)
-        config_layout.addWidget(self.config_combo)
-        
-        new_btn = QPushButton("新建")
-        new_btn.clicked.connect(self.create_config)
-        config_layout.addWidget(new_btn)
-        
-        import_btn = QPushButton("导入")
-        import_btn.clicked.connect(self.import_config)
-        config_layout.addWidget(import_btn)
-        
-        export_btn = QPushButton("导出")
-        export_btn.clicked.connect(self.export_config)
-        config_layout.addWidget(export_btn)
-        
-        delete_btn = QPushButton("删除")
-        delete_btn.clicked.connect(self.delete_config)
-        config_layout.addWidget(delete_btn)
-        
-        config_layout.addStretch()
-        layout.addLayout(config_layout)
-        
-        # 规则树
-        self.tree = QTreeWidget()
-        self.tree.setHeaderLabels(['规则', '操作'])
-        self.tree.setColumnWidth(0, 600)
-        self.tree.itemDoubleClicked.connect(self.on_item_double_clicked)
-        layout.addWidget(self.tree)
-        
-        # 底部按钮
-        button_layout = QHBoxLayout()
-        
-        add_group_btn = QPushButton("添加规则组")
-        add_group_btn.clicked.connect(self.add_group)
-        button_layout.addWidget(add_group_btn)
-        
-        button_layout.addStretch()
-        
-        save_btn = QPushButton("保存")
-        save_btn.clicked.connect(self.save)
-        button_layout.addWidget(save_btn)
-        
-        close_btn = QPushButton("关闭")
-        close_btn.clicked.connect(self.close)
-        button_layout.addWidget(close_btn)
-        
-        layout.addLayout(button_layout)
-        
-        self.setLayout(layout)
-        
-        # 加载配置列表
-        self.refresh_config_list()
-    
-    def refresh_config_list(self):
-        """刷新配置列表"""
-        self.config_combo.blockSignals(True)
-        self.config_combo.clear()
-        
-        configs = self.config_manager.list_configs()
-        
-        for config in configs:
-            display_text = f"{config['name']} ({config['rule_count']}条规则)"
-            if config['description']:
-                display_text += f" - {config['description'][:30]}"
-            
-            self.config_combo.addItem(display_text, config['path'])
-        
-        self.config_combo.blockSignals(False)
-        
-        # 加载第一个配置
-        if self.config_combo.count() > 0:
-            self.on_config_changed(0)
-    
-    def on_config_changed(self, index):
-        """配置文件切换"""
-        if index < 0:
-            return
-        
-        config_path = self.config_combo.itemData(index)
-        if config_path:
-            self.config_manager.load_config(config_path)
-            self.refresh_tree()
-            
-            # 通知主应用配置已更改
-            if self.save_callback:
-                self.save_callback()
-    
-    def refresh_tree(self):
-        """刷新规则树"""
-        self.tree.clear()
-        
-        if not self.config_manager.current_config:
-            return
-        
-        groups = self.config_manager.current_config.get("groups", [])
-        
-        for group_index, group in enumerate(groups):
-            # 创建规则组节点
-            group_item = QTreeWidgetItem(self.tree)
-            group_name = group.get("name", f"规则组 {group_index + 1}")
-            rules = group.get("rules", [])
-            rule_count = len(rules)
-            enabled_count = sum(1 for r in rules if r.get("enabled", True))
-            
-            collapsed = group.get("collapsed", False)
-            icon = "▶" if collapsed else "▼"
-            
-            group_item.setText(0, f"{icon} {group_name} ({enabled_count}/{rule_count}条规则)")
-            group_item.setData(0, Qt.ItemDataRole.UserRole, {"type": "group", "index": group_index})
-            group_item.setExpanded(not collapsed)
-            
-            # 添加规则
-            for rule_index, rule in enumerate(rules):
-                rule_item = QTreeWidgetItem(group_item)
-                
-                enabled = "☑" if rule.get("enabled", True) else "☐"
-                description = rule.get("description", "")
-                
-                rule_item.setText(0, f"  {enabled} {description}")
-                rule_item.setData(0, Qt.ItemDataRole.UserRole, {
-                    "type": "rule",
-                    "group_index": group_index,
-                    "rule_index": rule_index
-                })
-    
-    def on_item_double_clicked(self, item, column):
-        """双击项目"""
-        data = item.data(0, Qt.ItemDataRole.UserRole)
-        if not data:
-            return
-        
-        if data["type"] == "group":
-            # 切换折叠状态
-            group_index = data["index"]
-            groups = self.config_manager.current_config.get("groups", [])
-            if group_index < len(groups):
-                groups[group_index]["collapsed"] = not groups[group_index].get("collapsed", False)
-                self.refresh_tree()
-        
-        elif data["type"] == "rule":
-            # 编辑规则
-            self.edit_rule(data["group_index"], data["rule_index"])
-    
-    def add_group(self):
-        """添加规则组"""
-        from PyQt6.QtWidgets import QInputDialog
-        name, ok = QInputDialog.getText(self, "新建规则组", "规则组名称:")
-        if ok and name:
-            if not self.config_manager.current_config:
-                QMessageBox.warning(self, "错误", "请先选择或创建配置文件")
-                return
-            
-            groups = self.config_manager.current_config.setdefault("groups", [])
-            groups.append({
-                "name": name,
-                "description": "",
-                "collapsed": False,
-                "rules": []
-            })
-            
-            self.refresh_tree()
-            self.save()
-    
-    def edit_rule(self, group_index, rule_index):
-        """编辑规则"""
-        groups = self.config_manager.current_config.get("groups", [])
-        if group_index >= len(groups):
-            return
-        
-        rules = groups[group_index].get("rules", [])
-        if rule_index >= len(rules):
-            return
-        
-        rule = rules[rule_index]
-        dialog = RuleEditDialog(self, rule)
-        
-        if dialog.exec() == QDialog.DialogCode.Accepted:
-            rules[rule_index] = dialog.get_result()
-            self.refresh_tree()
-            self.save()
-    
-    def create_config(self):
-        """创建新配置"""
-        from PyQt6.QtWidgets import QInputDialog
-        name, ok = QInputDialog.getText(self, "新建配置", "配置名称:")
-        if ok and name:
-            description, ok2 = QInputDialog.getText(self, "新建配置", "配置描述:")
-            if ok2:
-                self.config_manager.create_config(name, description)
-                self.refresh_config_list()
-    
-    def import_config(self):
-        """导入配置"""
-        from PyQt6.QtWidgets import QFileDialog
-        file_path, _ = QFileDialog.getOpenFileName(
-            self, "导入配置", "", "JSON 文件 (*.json)"
-        )
-        
-        if file_path:
-            try:
-                import shutil
-                dest_path = self.config_manager.config_dir / Path(file_path).name
-                shutil.copy(file_path, dest_path)
-                self.refresh_config_list()
-                QMessageBox.information(self, "成功", "配置已导入")
-            except Exception as e:
-                QMessageBox.critical(self, "错误", f"导入失败: {e}")
-    
-    def export_config(self):
-        """导出配置"""
-        from PyQt6.QtWidgets import QFileDialog
-        if not self.config_manager.current_config_path:
-            return
-        
-        file_path, _ = QFileDialog.getSaveFileName(
-            self, "导出配置", "", "JSON 文件 (*.json)"
-        )
-        
-        if file_path:
-            try:
-                import shutil
-                shutil.copy(self.config_manager.current_config_path, file_path)
-                QMessageBox.information(self, "成功", "配置已导出")
-            except Exception as e:
-                QMessageBox.critical(self, "错误", f"导出失败: {e}")
-    
-    def delete_config(self):
-        """删除配置"""
-        if not self.config_manager.current_config_path:
-            return
-        
-        reply = QMessageBox.question(
-            self, "确认删除",
-            f"确定要删除配置 '{self.config_manager.current_config['name']}' 吗？",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
-        )
-        
-        if reply == QMessageBox.StandardButton.Yes:
-            success, message = self.config_manager.delete_config(
-                self.config_manager.current_config_path
-            )
-            
-            if success:
-                self.refresh_config_list()
-                QMessageBox.information(self, "成功", message)
-            else:
-                QMessageBox.warning(self, "错误", message)
-    
-    def save(self):
-        """保存配置"""
-        if self.config_manager.save_config():
-            if self.save_callback:
-                self.save_callback()
-    
-    def closeEvent(self, event):
-        """关闭事件"""
-        self.save()
-        event.accept()
-
-
-# ============================================================================
-# 旧的替换规则编辑器（保留用于兼容）
-# ============================================================================
-
 class ReplacementRuleEditor(QWidget):
     """替换规则编辑器（非模态窗口）"""
     
@@ -2108,18 +1492,7 @@ class MeowParser(QObject):
         self.enabled = False
         self.is_admin = self.check_admin()
         self.allowed_windows = self.load_window_settings()
-        
-        # 使用新的配置管理器
-        self.config_manager = ConfigFileManager(".kiro/rules")
-        self.text_processor = TextProcessor(self.config_manager)
-        
-        # 加载默认配置
-        configs = self.config_manager.list_configs()
-        if configs:
-            self.config_manager.load_config(configs[0]['path'])
-        
-        # 迁移旧配置（如果存在）
-        self._migrate_old_config_if_needed()
+        self.replacement_rules = self.load_replacement_rules()
         
         # 输入监听相关
         self.input_buffer = ""
@@ -2134,7 +1507,7 @@ class MeowParser(QObject):
         self.floating_window.hide()
         self.debug_window = None
         self.window_manager = None
-        self.config_editor = None  # 使用新的编辑器
+        self.replacement_editor = None
         
         # 创建系统托盘
         self.setup_tray()
@@ -2456,8 +1829,42 @@ class MeowParser(QObject):
             return None
     
     def process_text(self, text):
-        """处理文本 - 使用新的文本处理器"""
-        return self.text_processor.process(text)
+        """处理文本（应用规则组）"""
+        try:
+            if not text or len(text.strip()) == 0:
+                return text
+            
+            result_text = text
+            
+            # 应用所有启用的规则组
+            groups = self.replacement_rules.get("groups", {})
+            for group_name, group_data in groups.items():
+                if not group_data.get("enabled", True):
+                    continue
+                
+                rules = group_data.get("rules", [])
+                for rule in rules:
+                    pattern = rule.get("pattern", "")
+                    replacement = rule.get("replacement", "")
+                    is_regex = rule.get("is_regex", False)
+                    
+                    if not pattern:
+                        continue
+                    
+                    try:
+                        if is_regex:
+                            result_text = re.sub(pattern, replacement, result_text)
+                        else:
+                            if pattern in result_text:
+                                result_text = result_text.replace(pattern, replacement)
+                    except re.error as e:
+                        self.debug_log(f"正则表达式错误 '{pattern}': {e}")
+                        continue
+            
+            return result_text
+        except Exception as e:
+            self.debug_log(f"处理文本错误: {e}")
+            return text
     
     def debug_log(self, message):
         """记录调试日志"""
@@ -2612,20 +2019,20 @@ class MeowParser(QObject):
             self.debug_log(f"窗口管理器错误: {e}")
     
     def show_replacement_editor(self):
-        """显示配置文件编辑器"""
+        """显示替换规则编辑器"""
         try:
             # 如果编辑器已存在，直接显示
-            if hasattr(self, 'config_editor') and self.config_editor:
-                self.config_editor.show()
-                self.config_editor.raise_()
-                self.config_editor.activateWindow()
-                self.config_editor.refresh_config_list()
+            if hasattr(self, 'replacement_editor') and self.replacement_editor:
+                self.replacement_editor.show()
+                self.replacement_editor.raise_()
+                self.replacement_editor.activateWindow()
+                self.replacement_editor.refresh_rules()
             else:
                 # 创建新的编辑器（非模态）
-                self.config_editor = ConfigFileEditor(None, self.config_manager, self.on_config_changed)
-                self.config_editor.show()
+                self.replacement_editor = ReplacementRuleEditor(None, self.replacement_rules, self.save_replacement_rules)
+                self.replacement_editor.show()
         except Exception as e:
-            self.debug_log(f"配置编辑器错误: {e}")
+            self.debug_log(f"替换规则编辑器错误: {e}")
     
     def load_window_settings(self):
         """加载窗口设置"""
@@ -2644,47 +2051,6 @@ class MeowParser(QObject):
                 json.dump(self.allowed_windows, f, ensure_ascii=False, indent=2)
         except:
             pass
-    
-    def _migrate_old_config_if_needed(self):
-        """迁移旧配置（如果需要）"""
-        old_config_path = Path("replacement_rules.json")
-        
-        if not old_config_path.exists():
-            return
-        
-        try:
-            # 读取旧配置
-            with open(old_config_path, 'r', encoding='utf-8') as f:
-                old_config = json.load(f)
-            
-            # 迁移配置
-            new_config = self.config_manager.migrate_old_config(old_config)
-            
-            # 保存为新配置文件
-            migrated_path = self.config_manager.config_dir / "migrated_from_old.json"
-            self.config_manager.current_config = new_config
-            self.config_manager.current_config_path = migrated_path
-            self.config_manager.save_config()
-            
-            self.debug_log(f"✅ 配置已迁移到: {migrated_path}")
-            
-            # 备份旧配置
-            backup_path = old_config_path.with_suffix('.json.old')
-            import shutil
-            shutil.copy(old_config_path, backup_path)
-            self.debug_log(f"✅ 旧配置已备份到: {backup_path}")
-            
-            # 加载迁移后的配置
-            self.config_manager.load_config(migrated_path)
-            
-        except Exception as e:
-            self.debug_log(f"❌ 配置迁移失败: {e}")
-    
-    def on_config_changed(self):
-        """配置更改回调"""
-        if self.config_manager.current_config:
-            config_name = self.config_manager.current_config.get('name', '')
-            self.debug_log(f"配置已更新: {config_name}")
     
     def load_replacement_rules(self):
         """加载替换规则"""

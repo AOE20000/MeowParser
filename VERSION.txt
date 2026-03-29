@@ -1,14 +1,23 @@
 MeowParser Version Information
 ==============================
 
-Current Version: 2.1.0
+Current Version: 2.2.0
 Release Date: 2024-XX-XX
 Status: Stable
 
 Version History:
 ----------------
 
-v2.1.0 (Current)
+v2.2.0 (Current)
+- Config File System: Multiple configuration files support
+- Config Switching: Quick switch between different scenarios
+- Rule Groups: UI organization only, no execution order impact
+- Rule Order: Rules execute in file order, deterministic
+- Config Import/Export: Easy sharing and backup
+- Auto Migration: Automatic migration from old format
+- Bug Fixes: Fixed 8 bugs in rule editor
+
+v2.1.0
 - Rule Groups: Create and manage multiple rule groups
 - Independent enable/disable for each group
 - Improved rule management UI
