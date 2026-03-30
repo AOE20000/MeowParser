@@ -81,12 +81,9 @@
 
 所有配置文件统一存储在 `.meowparser` 目录：
 
-- **规则配置**：`.meowparser/rules/*.json`
+- **规则配置文件**：`.meowparser/rules/`
 - **窗口白名单**：`.meowparser/window_settings.json`
 - **实例锁文件**：`.meowparser/instance.lock`（Linux）
-- **旧配置**：`replacement_rules.json`（自动迁移）
-
-首次运行时，程序会自动创建默认配置并迁移旧配置文件。
 
 ---
 
