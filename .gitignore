@@ -56,5 +56,7 @@ Thumbs.db
 *.log
 
 # User data
+.meowparser/window_settings.json
+.meowparser/instance.lock
 window_settings.json
 replacement_rules.json

@@ -13,8 +13,8 @@ MeowParser/
 │   │   ├── tray_icon.py         # 系统托盘图标
 │   │   ├── floating_window.py   # 悬浮输入窗口
 │   │   ├── window_selector.py   # 窗口选择器
-│   │   ├── rule_editor.py       # 规则编辑器
-│   │   ├── config_editor.py     # 配置编辑器
+│   │   ├── config_editor.py     # 配置编辑器（推荐）
+│   │   ├── rule_editor.py       # 规则编辑器（旧版）
 │   │   └── debug_window.py      # 调试窗口
 │   ├── platform/             # 平台特定功能
 │   │   ├── windows.py           # Windows 平台
@@ -36,6 +36,7 @@ MeowParser/
 ├── requirements_pyqt6.txt    # Python 依赖列表
 ├── LICENSE                   # 开源协议
 ├── README.md                 # 项目主文档
+├── PROJECT_STRUCTURE.md      # 本文档
 │
 ├── run.bat                   # Windows 运行脚本
 ├── run.sh                    # Linux/macOS 运行脚本
@@ -47,7 +48,7 @@ MeowParser/
 ├── install_build_deps.bat    # Windows 依赖安装
 ├── install_build_deps.sh     # Linux 依赖安装
 │
-├── test_meow_rules.py        # 规则测试套件
+├── test_meow_rules.py        # 规则测试套件（30+ 用例）
 ├── test_single_text.py       # 单文本测试工具
 │
 ├── BUILD_GUIDE.md            # 打包详细指南
@@ -196,5 +197,6 @@ run.bat / run.sh      # 运行脚本
 
 ### v2.2.1 (2026-03-30)
 - 整理项目结构
-- 移除冗余文档
+- 移除冗余文档和临时测试文件
 - 保留核心功能和必要文档
+- 添加规则组上下移动功能

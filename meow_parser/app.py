@@ -444,21 +444,49 @@ class MeowParser(QObject):
     
     def load_window_settings(self):
         """加载窗口设置"""
+        from .constants import WINDOW_SETTINGS_FILE, OLD_WINDOW_SETTINGS_FILE
+        
         try:
-            if os.path.exists('window_settings.json'):
-                with open('window_settings.json', 'r', encoding='utf-8') as f:
+            # 尝试从新位置加载
+            if os.path.exists(WINDOW_SETTINGS_FILE):
+                with open(WINDOW_SETTINGS_FILE, 'r', encoding='utf-8') as f:
                     return json.load(f)
-        except:
-            pass
+            
+            # 如果新位置不存在，尝试从旧位置迁移
+            if os.path.exists(OLD_WINDOW_SETTINGS_FILE):
+                with open(OLD_WINDOW_SETTINGS_FILE, 'r', encoding='utf-8') as f:
+                    settings = json.load(f)
+                
+                # 保存到新位置
+                os.makedirs(os.path.dirname(WINDOW_SETTINGS_FILE), exist_ok=True)
+                with open(WINDOW_SETTINGS_FILE, 'w', encoding='utf-8') as f:
+                    json.dump(settings, f, ensure_ascii=False, indent=2)
+                
+                # 删除旧文件
+                try:
+                    os.remove(OLD_WINDOW_SETTINGS_FILE)
+                    self.debug_log("已迁移窗口设置到 .meowparser 目录")
+                except:
+                    pass
+                
+                return settings
+        except Exception as e:
+            self.debug_log(f"加载窗口设置失败: {e}")
+        
         return {}
     
     def save_window_settings(self):
         """保存窗口设置"""
+        from .constants import WINDOW_SETTINGS_FILE
+        
         try:
-            with open('window_settings.json', 'w', encoding='utf-8') as f:
+            # 确保目录存在
+            os.makedirs(os.path.dirname(WINDOW_SETTINGS_FILE), exist_ok=True)
+            
+            with open(WINDOW_SETTINGS_FILE, 'w', encoding='utf-8') as f:
                 json.dump(self.allowed_windows, f, ensure_ascii=False, indent=2)
-        except:
-            pass
+        except Exception as e:
+            self.debug_log(f"保存窗口设置失败: {e}")
     
     def _migrate_old_config_if_needed(self):
         """迁移旧配置（如果需要）"""

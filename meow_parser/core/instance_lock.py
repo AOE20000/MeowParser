@@ -27,8 +27,12 @@ def check_single_instance():
             return False
     else:
         # Linux: 使用文件锁
-        lock_file = Path.home() / '.meowparser.lock'
+        lock_file = Path('.meowparser') / 'instance.lock'
+        
         try:
+            # 确保目录存在
+            lock_file.parent.mkdir(parents=True, exist_ok=True)
+            
             if lock_file.exists():
                 # 检查进程是否还在运行
                 try:
@@ -38,6 +42,7 @@ def check_single_instance():
                         return False
                 except:
                     pass
+            
             # 写入当前进程 PID
             with open(lock_file, 'w') as f:
                 f.write(str(os.getpid()))
