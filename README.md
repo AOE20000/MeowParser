@@ -1,10 +1,6 @@
 # MeowParser - 喵语解析器
 
-智能文本处理工具，通过输入监听和悬浮窗实现实时文本转换
-
-基于 PyQt6 构建，支持跨平台运行（Windows/Linux/macOS）
-
-**当前版本：2.2.1**
+智能文本处理工具，通过输入焦点劫持和悬浮窗中转实现实时文本替换
 
 ---
 
@@ -235,12 +231,6 @@ MeowParser/
 ```
 
 详细结构请查看 [PROJECT_STRUCTURE.md](PROJECT_STRUCTURE.md)
-
----
-
-## 许可证
-
-本项目采用开源协议，详见 [LICENSE](LICENSE)
 
 ---
 
