@@ -142,6 +142,5 @@ python meow_parser.py
 
 ## Keep Android Open
 
-> **保持安卓开放**
-
+保持安卓开放
 https://keepandroidopen.org
