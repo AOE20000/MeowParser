@@ -15,7 +15,7 @@
 
 ---
 
-## 工作原理
+## 快捷键与工作原理
 
 启用后，当你在白名单窗口中开始输入时：
 
@@ -26,19 +26,11 @@
 5. **回车**：应用替换规则，自动输入到原位置并回车
 6. **Ctrl+回车**：直接发送原始内容，不做替换
 7. **ESC**：取消输入，关闭悬浮窗
+8. **Ctrl+Shift+Alt+M**：切换当前窗口启用状态
 
 ---
 
-### 快捷键
-
-- **回车**：应用规则并发送
-- **Ctrl+回车**：发送原始内容
-- **ESC**：取消输入
-- **Ctrl+Shift+Alt+M**：切换当前窗口启用状态
-
----
-
-## 文本替换
+## 即时文本处理
 
 ### 配置系统
 
@@ -99,8 +91,9 @@
 - [THEME_GUIDE.md](docs/THEME_GUIDE.md) - 主题切换指南
 - [CHANGELOG.md](docs/CHANGELOG.md) - 更新日志
 - [RULE_GROUPS_GUIDE.md](docs/RULE_GROUPS_GUIDE.md) - 规则指南
-- [archive](docs/archive/) - 归档的文档
 - [PROJECT_LAYOUT.md](PROJECT_LAYOUT.md) - 项目结构
+- [BUILD_GUIDE.md](BUILD_GUIDE.md) - 打包说明
+- [archive](docs/archive/) - 归档的文档
 - [LICENSE](LICENSE) - 开源协议
 
 ---
@@ -125,40 +118,6 @@ run.bat
 # 或直接运行
 python meow_parser.py
 ```
-
----
-
-## 打包
-
-### 跨平台打包（推荐）
-
-```bash
-# 自动检测系统并打包
-python build.py
-```
-
-### Windows 打包
-
-```cmd
-# 使用批处理脚本
-build_windows.bat
-
-# 或手动打包
-pyinstaller --clean meow_parser.spec
-```
-
-### Linux 打包
-
-```bash
-# 使用 shell 脚本
-chmod +x build_linux.sh
-./build_linux.sh
-
-# 或手动打包
-pyinstaller --clean meow_parser.spec
-```
-
-详细打包说明请查看 [BUILD_GUIDE.md](BUILD_GUIDE.md)
 
 ---
 
