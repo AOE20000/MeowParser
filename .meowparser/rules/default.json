@@ -1,0 +1,38 @@
+{
+  "name": "喵语转换（默认）",
+  "version": "1.0.0",
+  "description": "将文本转换为可爱的喵语",
+  "author": "MeowParser",
+  "created": "2026-03-30 09:20:34",
+  "updated": "2026-03-30 09:20:34",
+  "groups": [
+    {
+      "name": "喵语转换",
+      "description": "在标点前添加喵",
+      "collapsed": false,
+      "rules": [
+        {
+          "enabled": true,
+          "pattern": "([^喵])([。，！？；、）（：])",
+          "replacement": "\\1喵\\2",
+          "is_regex": true,
+          "description": "标点前添加喵"
+        },
+        {
+          "enabled": true,
+          "pattern": "([^喵。，！？；、）（：\\n])(\\n)",
+          "replacement": "\\1喵\\2",
+          "is_regex": true,
+          "description": "换行前添加喵"
+        },
+        {
+          "enabled": true,
+          "pattern": "([^。，！？；、）（：\\n])$",
+          "replacement": "\\1喵",
+          "is_regex": true,
+          "description": "句尾添加喵"
+        }
+      ]
+    }
+  ]
+}

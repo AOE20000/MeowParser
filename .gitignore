@@ -40,8 +40,17 @@ env/
 .DS_Store
 Thumbs.db
 
+# Backup files
+*.backup
+*.bak
+*.old
+*.tmp
+*_original.py
+
 # Config backups
+*.json.backup
 *.json.bak
+*.json.old
 *.lock
 
 # Logs
@@ -52,4 +61,11 @@ Thumbs.db
 *_FIX.md
 *_ANALYSIS.md
 *_STATUS.md
+*_SUMMARY.md
+*_PLAN.md
 COMMIT_MESSAGE*.txt
+CLEANUP_PLAN.md
+
+# Test files (keep only main test files)
+test_temp*.py
+test_debug*.py
