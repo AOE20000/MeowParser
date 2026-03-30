@@ -30,6 +30,7 @@ class FloatingInputWindow(QWidget):
         self.click_pos = None
         self.is_processing = False
         self.send_lock = threading.Lock()  # 添加线程锁
+        self.direct_input_mode = False  # 直接输入模式
         
         # 连接信号到槽
         self.show_signal.connect(self._do_show_at)
@@ -45,6 +46,9 @@ class FloatingInputWindow(QWidget):
             Qt.WindowType.Tool
         )
         
+        # 设置对象名称，用于样式表选择器
+        self.setObjectName("FloatingInputWindow")
+        
         # 确保窗口不透明
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, False)
         self.setAttribute(Qt.WidgetAttribute.WA_OpaquePaintEvent, True)
@@ -52,15 +56,6 @@ class FloatingInputWindow(QWidget):
         
         # 设置固定大小，避免大小为0
         self.setFixedSize(500, 80)
-        
-        # 使用内联样式，完全覆盖主题
-        self.setStyleSheet("""
-            FloatingInputWindow {
-                background-color: #1e1e1e;
-                border: 3px solid #0078d4;
-                border-radius: 6px;
-            }
-        """)
         
         # 创建布局
         layout = QVBoxLayout()
@@ -71,25 +66,6 @@ class FloatingInputWindow(QWidget):
         self.entry = QLineEdit()
         self.entry.setFixedHeight(50)
         self.entry.setPlaceholderText("输入内容 (回车发送 | Ctrl+回车原始 | ESC取消)")
-        
-        # 输入框样式 - 使用内联样式
-        self.entry.setStyleSheet("""
-            QLineEdit {
-                background-color: #252526;
-                color: #cccccc;
-                border: 2px solid #3e3e42;
-                border-radius: 4px;
-                padding: 8px 12px;
-                font-size: 14pt;
-                font-family: 'Microsoft YaHei UI', 'Segoe UI', 'Arial';
-                selection-background-color: #0078d4;
-                selection-color: #ffffff;
-            }
-            QLineEdit:focus {
-                border: 2px solid #0078d4;
-                background-color: #1e1e1e;
-            }
-        """)
         
         self.entry.returnPressed.connect(self.on_enter)
         layout.addWidget(self.entry)
@@ -115,10 +91,11 @@ class FloatingInputWindow(QWidget):
                     return True
         return super().eventFilter(obj, event)
     
-    def show_at(self, x, y, target_window=None):
+    def show_at(self, x, y, target_window=None, direct_input=False):
         """在指定位置显示悬浮窗（线程安全）"""
         # 使用信号发送到主线程
-        print(f"show_at 被调用: ({x}, {y})")
+        print(f"show_at 被调用: ({x}, {y}), 直接输入模式: {direct_input}")
+        self.direct_input_mode = direct_input
         self.show_signal.emit(x, y, target_window)
     
     def _do_show_at(self, x, y, target_window=None):
@@ -296,60 +273,97 @@ class FloatingInputWindow(QWidget):
             
             self.parent_app.debug_log(f"原文本: {text}")
             self.parent_app.debug_log(f"处理后: {final_text}")
+            self.parent_app.debug_log(f"直接输入模式: {self.direct_input_mode}")
             
             # 等待悬浮窗完全隐藏
             time.sleep(0.15)
             
             # 恢复焦点（改进：添加验证和重试机制）
             focus_restored = False
-            if self.click_pos and self.target_window:
-                if IS_WINDOWS:
-                    try:
-                        # 尝试恢复焦点（最多重试3次）
-                        for attempt in range(3):
-                            win32gui.SetForegroundWindow(self.target_window)
-                            time.sleep(0.05)
-                            
-                            # 验证焦点是否恢复
-                            current_hwnd = win32gui.GetForegroundWindow()
-                            if current_hwnd == self.target_window:
-                                focus_restored = True
-                                break
-                            time.sleep(0.05)
-                        
-                        if focus_restored:
-                            # 点击原位置
-                            x, y = self.click_pos
-                            win32api.SetCursorPos((x, y))
-                            time.sleep(0.05)
-                            win32api.mouse_event(win32con.MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0)
-                            time.sleep(0.03)
-                            win32api.mouse_event(win32con.MOUSEEVENTF_LEFTUP, 0, 0, 0, 0)
+            
+            if self.direct_input_mode:
+                # 直接输入模式：跳过点击，直接输入
+                self.parent_app.debug_log("使用直接输入模式，跳过点击流程")
+                
+                if self.target_window:
+                    if IS_WINDOWS:
+                        try:
+                            # 只恢复窗口焦点，不点击
+                            for attempt in range(3):
+                                win32gui.SetForegroundWindow(self.target_window)
+                                time.sleep(0.05)
+                                
+                                current_hwnd = win32gui.GetForegroundWindow()
+                                if current_hwnd == self.target_window:
+                                    focus_restored = True
+                                    break
+                                time.sleep(0.05)
+                        except Exception as e:
+                            self.parent_app.debug_log(f"焦点恢复错误: {e}")
+                    else:
+                        # Linux
+                        try:
+                            import subprocess
+                            subprocess.run(['xdotool', 'windowactivate', str(self.target_window)],
+                                         timeout=1, check=False)
                             time.sleep(0.1)
-                        else:
-                            self.parent_app.debug_log("警告: 焦点恢复失败")
-                    except Exception as e:
-                        self.parent_app.debug_log(f"焦点恢复错误: {e}")
-                else:
-                    # Linux: 使用 xdotool 恢复焦点
-                    try:
-                        import subprocess
-                        # 激活窗口
-                        subprocess.run(['xdotool', 'windowactivate', str(self.target_window)],
-                                     timeout=1, check=False)
-                        time.sleep(0.1)
-                        
-                        # 点击位置
-                        x, y = self.click_pos
-                        subprocess.run(['xdotool', 'mousemove', str(x), str(y)],
-                                     timeout=1, check=False)
-                        time.sleep(0.05)
-                        subprocess.run(['xdotool', 'click', '1'],
-                                     timeout=1, check=False)
-                        time.sleep(0.1)
-                        focus_restored = True
-                    except Exception as e:
-                        self.parent_app.debug_log(f"Linux 焦点恢复错误: {e}")
+                            focus_restored = True
+                        except Exception as e:
+                            self.parent_app.debug_log(f"Linux 焦点恢复错误: {e}")
+                
+                # 直接输入模式下，稍微延长等待时间
+                time.sleep(0.1)
+                
+            else:
+                # 标准模式：点击后输入
+                if self.click_pos and self.target_window:
+                    if IS_WINDOWS:
+                        try:
+                            # 尝试恢复焦点（最多重试3次）
+                            for attempt in range(3):
+                                win32gui.SetForegroundWindow(self.target_window)
+                                time.sleep(0.05)
+                                
+                                # 验证焦点是否恢复
+                                current_hwnd = win32gui.GetForegroundWindow()
+                                if current_hwnd == self.target_window:
+                                    focus_restored = True
+                                    break
+                                time.sleep(0.05)
+                            
+                            if focus_restored:
+                                # 点击原位置
+                                x, y = self.click_pos
+                                win32api.SetCursorPos((x, y))
+                                time.sleep(0.05)
+                                win32api.mouse_event(win32con.MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0)
+                                time.sleep(0.03)
+                                win32api.mouse_event(win32con.MOUSEEVENTF_LEFTUP, 0, 0, 0, 0)
+                                time.sleep(0.1)
+                            else:
+                                self.parent_app.debug_log("警告: 焦点恢复失败")
+                        except Exception as e:
+                            self.parent_app.debug_log(f"焦点恢复错误: {e}")
+                    else:
+                        # Linux: 使用 xdotool 恢复焦点
+                        try:
+                            import subprocess
+                            # 激活窗口
+                            subprocess.run(['xdotool', 'windowactivate', str(self.target_window)],
+                                         timeout=1, check=False)
+                            time.sleep(0.1)
+                            
+                            # 点击位置
+                            x, y = self.click_pos
+                            subprocess.run(['xdotool', 'mousemove', str(x), str(y)],
+                                         timeout=1, check=False)
+                            time.sleep(0.05)
+                            subprocess.run(['xdotool', 'click', '1'],
+                                         timeout=1, check=False)
+                            time.sleep(0.1)
+                            focus_restored = True
+                        except Exception as e:
+                            self.parent_app.debug_log(f"Linux 焦点恢复错误: {e}")
             
             # 输入文本
             if final_text:

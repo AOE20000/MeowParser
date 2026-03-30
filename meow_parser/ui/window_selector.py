@@ -6,8 +6,9 @@
 
 import threading
 from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout,
-    QLabel, QLineEdit, QPushButton, QTreeWidget, QTreeWidgetItem
+    QWidget, QVBoxLayout, QHBoxLayout, QDialog,
+    QLabel, QLineEdit, QPushButton, QTreeWidget, QTreeWidgetItem,
+    QCheckBox, QGroupBox, QMessageBox
 )
 from PyQt6.QtCore import Qt, pyqtSignal, QTimer
 import psutil
@@ -16,6 +17,108 @@ from ..constants import IS_WINDOWS, IS_LINUX
 if IS_WINDOWS:
     import win32gui
     import win32process
+
+
+class WindowConfigDialog(QDialog):
+    """窗口配置对话框"""
+    
+    def __init__(self, parent, window_key, config):
+        super().__init__(parent)
+        self.window_key = window_key
+        self.config = config or {}
+        self.init_ui()
+    
+    def init_ui(self):
+        """初始化UI"""
+        self.setWindowTitle(f"窗口配置 - {self.window_key}")
+        self.setMinimumWidth(500)
+        
+        layout = QVBoxLayout()
+        
+        # 窗口信息
+        info_label = QLabel(f"窗口：{self.window_key}")
+        info_label.setStyleSheet("font-weight: bold; padding: 10px;")
+        layout.addWidget(info_label)
+        
+        # 基本设置组
+        basic_group = QGroupBox("基本设置")
+        basic_layout = QVBoxLayout()
+        
+        self.enabled_checkbox = QCheckBox("启用此窗口")
+        self.enabled_checkbox.setChecked(self.config.get("enabled", True))
+        basic_layout.addWidget(self.enabled_checkbox)
+        
+        basic_group.setLayout(basic_layout)
+        layout.addWidget(basic_group)
+        
+        # 触发器设置组
+        trigger_group = QGroupBox("触发器设置")
+        trigger_layout = QVBoxLayout()
+        
+        # 自定义触发器
+        trigger_hint = QLabel("自定义触发器（留空使用默认空格键）：")
+        trigger_hint.setStyleSheet("color: gray;")
+        trigger_layout.addWidget(trigger_hint)
+        
+        trigger_input_layout = QHBoxLayout()
+        trigger_input_layout.addWidget(QLabel("触发键："))
+        self.trigger_input = QLineEdit()
+        self.trigger_input.setPlaceholderText("例如：u（输入u后按空格触发）")
+        self.trigger_input.setText(self.config.get("trigger_key", ""))
+        self.trigger_input.setMaxLength(10)
+        trigger_input_layout.addWidget(self.trigger_input)
+        trigger_layout.addLayout(trigger_input_layout)
+        
+        trigger_example = QLabel("示例：设置为 'u'，则输入 'u' 后按空格触发悬浮窗")
+        trigger_example.setStyleSheet("color: gray; font-size: 10px; padding-left: 20px;")
+        trigger_layout.addWidget(trigger_example)
+        
+        trigger_group.setLayout(trigger_layout)
+        layout.addWidget(trigger_group)
+        
+        # 输入模式设置组
+        mode_group = QGroupBox("输入模式")
+        mode_layout = QVBoxLayout()
+        
+        self.direct_input_checkbox = QCheckBox("直接输入模式")
+        self.direct_input_checkbox.setChecked(self.config.get("direct_input", False))
+        mode_layout.addWidget(self.direct_input_checkbox)
+        
+        mode_hint = QLabel(
+            "启用后，回车时直接输入文本并回车，跳过重新激活输入框的流程。\n"
+            "适用于不需要点击输入框即可直接输入的窗口。"
+        )
+        mode_hint.setStyleSheet("color: gray; font-size: 10px; padding-left: 20px;")
+        mode_hint.setWordWrap(True)
+        mode_layout.addWidget(mode_hint)
+        
+        mode_group.setLayout(mode_layout)
+        layout.addWidget(mode_group)
+        
+        # 按钮
+        button_layout = QHBoxLayout()
+        
+        ok_btn = QPushButton("确定")
+        ok_btn.clicked.connect(self.accept)
+        button_layout.addWidget(ok_btn)
+        
+        cancel_btn = QPushButton("取消")
+        cancel_btn.clicked.connect(self.reject)
+        button_layout.addWidget(cancel_btn)
+        
+        layout.addLayout(button_layout)
+        
+        self.setLayout(layout)
+    
+    def get_config(self):
+        """获取配置"""
+        trigger_key = self.trigger_input.text().strip()
+        
+        return {
+            "enabled": self.enabled_checkbox.isChecked(),
+            "trigger_key": trigger_key if trigger_key else "",
+            "direct_input": self.direct_input_checkbox.isChecked()
+        }
 
 
 class WindowSelector(QWidget):
@@ -59,11 +162,17 @@ class WindowSelector(QWidget):
         
         # 窗口列表
         self.tree = QTreeWidget()
-        self.tree.setHeaderLabels(['进程名', '窗口标题', '状态'])
+        self.tree.setHeaderLabels(['进程名', '窗口标题', '状态', '触发器', '模式'])
         self.tree.setColumnWidth(0, 150)
-        self.tree.setColumnWidth(1, 500)
+        self.tree.setColumnWidth(1, 350)
         self.tree.setColumnWidth(2, 100)
+        self.tree.setColumnWidth(3, 80)
+        self.tree.setColumnWidth(4, 80)
         self.tree.itemDoubleClicked.connect(self.toggle_window)
+        
+        # 启用右键菜单
+        self.tree.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.tree.customContextMenuRequested.connect(self.show_context_menu)
         
         # 启用排序功能
         self.tree.setSortingEnabled(True)
@@ -72,7 +181,7 @@ class WindowSelector(QWidget):
         layout.addWidget(self.tree)
         
         # 提示标签
-        hint_label = QLabel("双击窗口项目可切换启用状态 | 点击列标题可排序")
+        hint_label = QLabel("双击切换启用状态 | 右键配置窗口 | 点击列标题排序")
         hint_label.setStyleSheet("color: gray;")
         layout.addWidget(hint_label)
         
@@ -131,19 +240,91 @@ class WindowSelector(QWidget):
             if title.strip() in ["MeowParser 调试窗口", "MeowParser调试窗口"]:
                 # 调试窗口保持启用，不允许禁用
                 if window_key not in self.allowed_windows:
-                    self.allowed_windows[window_key] = True
+                    self.allowed_windows[window_key] = {"enabled": True}
                     self.refresh_windows()
                 return
             
             # 切换状态
             if window_key in self.allowed_windows:
-                del self.allowed_windows[window_key]
+                # 如果是字典，切换 enabled 状态
+                if isinstance(self.allowed_windows[window_key], dict):
+                    self.allowed_windows[window_key]["enabled"] = not self.allowed_windows[window_key].get("enabled", True)
+                else:
+                    # 旧格式（布尔值），删除
+                    del self.allowed_windows[window_key]
             else:
-                self.allowed_windows[window_key] = True
+                self.allowed_windows[window_key] = {"enabled": True}
             
             self.refresh_windows()
         except Exception as e:
             print(f"切换窗口状态错误: {e}")
+    
+    def show_context_menu(self, position):
+        """显示右键菜单"""
+        item = self.tree.itemAt(position)
+        if not item:
+            return
+        
+        try:
+            from PyQt6.QtWidgets import QMenu
+            
+            process_name = item.text(0)
+            title = item.text(1)
+            window_key = f"{process_name} - {title}"
+            
+            menu = QMenu(self)
+            
+            # 配置窗口
+            config_action = menu.addAction("⚙️ 配置窗口...")
+            config_action.triggered.connect(lambda: self.configure_window(window_key))
+            
+            menu.addSeparator()
+            
+            # 启用/禁用
+            if window_key in self.allowed_windows:
+                config = self.allowed_windows[window_key]
+                enabled = config.get("enabled", True) if isinstance(config, dict) else config
+                
+                if enabled:
+                    toggle_action = menu.addAction("❌ 禁用窗口")
+                else:
+                    toggle_action = menu.addAction("✅ 启用窗口")
+            else:
+                toggle_action = menu.addAction("✅ 启用窗口")
+            
+            toggle_action.triggered.connect(lambda: self.toggle_window(item, 0))
+            
+            menu.exec(self.tree.viewport().mapToGlobal(position))
+            
+        except Exception as e:
+            print(f"显示右键菜单错误: {e}")
+    
+    def configure_window(self, window_key):
+        """配置窗口"""
+        try:
+            # 获取当前配置
+            if window_key in self.allowed_windows:
+                config = self.allowed_windows[window_key]
+                # 兼容旧格式
+                if not isinstance(config, dict):
+                    config = {"enabled": config}
+            else:
+                config = {"enabled": False}
+            
+            # 显示配置对话框
+            dialog = WindowConfigDialog(self, window_key, config)
+            
+            if dialog.exec() == QDialog.DialogCode.Accepted:
+                new_config = dialog.get_config()
+                self.allowed_windows[window_key] = new_config
+                self.refresh_windows()
+                
+                if self.save_callback:
+                    self.save_callback()
+                
+        except Exception as e:
+            print(f"配置窗口错误: {e}")
+            QMessageBox.critical(self, "错误", f"配置窗口失败: {e}")
     
     def refresh_windows(self):
         """刷新窗口列表"""
@@ -282,22 +463,50 @@ class WindowSelector(QWidget):
                     # 检查是否是调试窗口
                     is_debug_window = title.strip() in ["MeowParser 调试窗口", "MeowParser调试窗口"]
                     
+                    # 获取窗口配置
+                    if window_key in self.allowed_windows:
+                        config = self.allowed_windows[window_key]
+                        # 兼容旧格式
+                        if not isinstance(config, dict):
+                            config = {"enabled": config}
+                            self.allowed_windows[window_key] = config
+                    else:
+                        config = {"enabled": False}
+                    
+                    enabled = config.get("enabled", False)
+                    trigger_key = config.get("trigger_key", "")
+                    direct_input = config.get("direct_input", False)
+                    
                     if is_debug_window:
-                        self.allowed_windows[window_key] = True
-                        enabled = "✓ 已启用（锁定）"
+                        self.allowed_windows[window_key] = {"enabled": True}
+                        enabled_text = "✓ 已启用（锁定）"
                         sort_key = "0"
                     else:
-                        if window_key in self.allowed_windows:
-                            enabled = "✓ 已启用"
+                        if enabled:
+                            enabled_text = "✓ 已启用"
                             sort_key = "1"
                         else:
-                            enabled = "✗ 未启用"
+                            enabled_text = "✗ 未启用"
                             sort_key = "2"
+                    
+                    # 触发器显示
+                    if trigger_key:
+                        trigger_text = f"'{trigger_key}'+空格"
+                    else:
+                        trigger_text = "空格"
+                    
+                    # 模式显示
+                    if direct_input:
+                        mode_text = "直接输入"
+                    else:
+                        mode_text = "标准"
                     
                     item = QTreeWidgetItem(self.tree)
                     item.setText(0, process_name)
                     item.setText(1, title)
-                    item.setText(2, enabled)
+                    item.setText(2, enabled_text)
+                    item.setText(3, trigger_text)
+                    item.setText(4, mode_text)
                     
                     # 设置隐藏的排序键
                     item.setData(2, Qt.ItemDataRole.UserRole, sort_key)

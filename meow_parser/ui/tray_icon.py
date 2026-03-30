@@ -58,46 +58,82 @@ class TrayIconManager:
         self.tray_icon.setToolTip("MeowParser (禁用)")
         
         # 创建菜单
-        menu = QMenu()
+        self.menu = QMenu()
         
-        self.toggle_action = QAction("启用/禁用", menu)
+        # 应用菜单样式
+        self.update_menu_style()
+        
+        self.toggle_action = QAction("启用/禁用", self.menu)
         self.toggle_action.triggered.connect(self.parent_app.toggle)
-        menu.addAction(self.toggle_action)
+        self.menu.addAction(self.toggle_action)
         
-        menu.addSeparator()
+        self.menu.addSeparator()
         
-        window_action = QAction("窗口管理", menu)
+        window_action = QAction("窗口管理", self.menu)
         window_action.triggered.connect(self.parent_app.show_window_manager)
-        menu.addAction(window_action)
+        self.menu.addAction(window_action)
         
-        rules_action = QAction("替换规则", menu)
+        rules_action = QAction("替换规则", self.menu)
         rules_action.triggered.connect(self.parent_app.show_replacement_editor)
-        menu.addAction(rules_action)
+        self.menu.addAction(rules_action)
         
-        debug_action = QAction("调试窗口", menu)
+        debug_action = QAction("调试窗口", self.menu)
         debug_action.triggered.connect(self.parent_app.show_debug_window)
-        menu.addAction(debug_action)
+        self.menu.addAction(debug_action)
         
-        menu.addSeparator()
+        self.menu.addSeparator()
         
-        status_text = f"权限状态: {'✓ 管理员' if self.parent_app.is_admin else '✗ 普通用户'}"
-        status_action = QAction(status_text, menu)
-        status_action.setEnabled(False)
-        menu.addAction(status_action)
+        # 主题切换菜单
+        self.theme_menu = QMenu("主题", self.menu)
+        self.update_menu_style()
         
-        # 快捷键提示
-        hotkey_text = "快捷键: Ctrl+Shift+Alt+M 切换当前窗口"
-        hotkey_action = QAction(hotkey_text, menu)
-        hotkey_action.setEnabled(False)
-        menu.addAction(hotkey_action)
+        self.theme_auto_action = QAction("🌓 自动（跟随系统）", self.theme_menu)
+        self.theme_auto_action.setCheckable(True)
+        self.theme_auto_action.triggered.connect(lambda: self.parent_app.change_theme("auto"))
+        self.theme_menu.addAction(self.theme_auto_action)
         
-        menu.addSeparator()
+        self.theme_dark_action = QAction("🌙 深色", self.theme_menu)
+        self.theme_dark_action.setCheckable(True)
+        self.theme_dark_action.triggered.connect(lambda: self.parent_app.change_theme("dark"))
+        self.theme_menu.addAction(self.theme_dark_action)
         
-        quit_action = QAction("退出", menu)
+        self.theme_light_action = QAction("☀️ 浅色", self.theme_menu)
+        self.theme_light_action.setCheckable(True)
+        self.theme_light_action.triggered.connect(lambda: self.parent_app.change_theme("light"))
+        self.theme_menu.addAction(self.theme_light_action)
+        
+        self.menu.addMenu(self.theme_menu)
+        
+        # 更新主题菜单选中状态
+        self.update_theme_menu()
+        
+        self.menu.addSeparator()
+        
+        quit_action = QAction("退出", self.menu)
         quit_action.triggered.connect(self.parent_app.quit_app)
-        menu.addAction(quit_action)
+        self.menu.addAction(quit_action)
         
-        self.tray_icon.setContextMenu(menu)
+        self.tray_icon.setContextMenu(self.menu)
+    
+    def update_menu_style(self):
+        """更新菜单样式"""
+        if hasattr(self.parent_app, 'style_manager'):
+            style = self.parent_app.style_manager.get_menu_style()
+            if hasattr(self, 'menu'):
+                self.menu.setStyleSheet(style)
+            if hasattr(self, 'theme_menu'):
+                self.theme_menu.setStyleSheet(style)
+    
+    def update_theme_menu(self):
+        """更新主题菜单选中状态"""
+        if hasattr(self.parent_app, 'style_manager'):
+            current_theme = self.parent_app.style_manager.current_theme
+            self.theme_auto_action.setChecked(current_theme == "auto")
+            self.theme_dark_action.setChecked(current_theme == "dark")
+            self.theme_light_action.setChecked(current_theme == "light")
+        
+        # 同时更新菜单样式
+        self.update_menu_style()
     
     def show(self):
         """显示托盘图标"""

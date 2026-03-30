@@ -17,6 +17,7 @@ from .config_editor import ConfigFileEditor, RuleEditDialog
 from .rule_editor import ReplacementRuleEditor, RuleDialog
 
 from .tray_icon import TrayIconManager
+from .styles import StyleManager
 
 __all__ = [
     'DebugWindow',
@@ -29,4 +30,5 @@ __all__ = [
     'ReplacementRuleEditor',
     'RuleDialog',
     'TrayIconManager',
+    'StyleManager',
 ]

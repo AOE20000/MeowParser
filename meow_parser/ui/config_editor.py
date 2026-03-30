@@ -148,8 +148,9 @@ class ConfigFileEditor(QWidget):
         
         # 规则树
         self.tree = QTreeWidget()
-        self.tree.setHeaderLabels(['规则', '操作'])
-        self.tree.setColumnWidth(0, 600)
+        self.tree.setHeaderLabels(['规则', '正则'])
+        self.tree.setColumnWidth(0, 650)
+        self.tree.setColumnWidth(1, 80)
         self.tree.itemDoubleClicked.connect(self.on_item_double_clicked)
         self.tree.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.tree.customContextMenuRequested.connect(self.show_context_menu)
@@ -234,7 +235,7 @@ class ConfigFileEditor(QWidget):
             icon = "▶" if collapsed else "▼"
             
             group_item.setText(0, f"{icon} {group_name} ({enabled_count}/{rule_count}条规则)")
-            group_item.setText(1, "编辑 | 删除 | ↑ | ↓")
+            group_item.setText(1, "")  # 规则组不显示正则标识
             group_item.setData(0, Qt.ItemDataRole.UserRole, {"type": "group", "index": group_index})
             group_item.setExpanded(not collapsed)
             
@@ -246,13 +247,24 @@ class ConfigFileEditor(QWidget):
                 description = rule.get("description", "")
                 pattern = rule.get("pattern", "")
                 replacement = rule.get("replacement", "")
+                is_regex = rule.get("is_regex", False)
                 
                 # 显示更详细的信息
                 if not description:
                     description = f"{pattern} → {replacement}"
                 
                 rule_item.setText(0, f"  {enabled} {description}")
-                rule_item.setText(1, "编辑 | 删除 | ↑ | ↓")
+                
+                # 正则表达式标识
+                if is_regex:
+                    rule_item.setText(1, "✓ 正则")
+                    # 使用不同的颜色突出显示正则规则
+                    from PyQt6.QtGui import QBrush, QColor
+                    rule_item.setForeground(1, QBrush(QColor("#FFA500")))  # 橙色
+                    rule_item.setForeground(0, QBrush(QColor("#E0E0E0")))  # 浅灰色
+                else:
+                    rule_item.setText(1, "")
+                
                 rule_item.setData(0, Qt.ItemDataRole.UserRole, {
                     "type": "rule",
                     "group_index": group_index,

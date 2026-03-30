@@ -12,7 +12,7 @@ import ctypes
 import threading
 from pathlib import Path
 
-from PyQt6.QtWidgets import QApplication, QMessageBox
+from PyQt6.QtWidgets import QApplication, QMessageBox, QSystemTrayIcon
 from PyQt6.QtCore import QObject, pyqtSignal, QTimer
 from PyQt6.QtGui import QCursor
 
@@ -52,8 +52,11 @@ class MeowParser(QObject):
         
         # 基本状态
         self.enabled = False
-        self.is_admin = self.check_admin()
         self.allowed_windows = self.load_window_settings()
+        
+        # 样式管理器
+        from .ui.styles import StyleManager
+        self.style_manager = StyleManager()
         
         # 配置管理
         self.config_manager = ConfigFileManager(".meowparser/rules")
@@ -90,25 +93,12 @@ class MeowParser(QObject):
         self.log_signal.connect(self._log_to_debug)
     
     def check_admin(self):
-        """检查管理员权限"""
-        if IS_WINDOWS:
-            try:
-                return ctypes.windll.shell32.IsUserAnAdmin()
-            except:
-                return False
-        else:
-            return os.geteuid() == 0
+        """检查管理员权限（已废弃，保留用于兼容性）"""
+        from .core.privilege import is_admin
+        return is_admin()
     
     def toggle(self):
         """切换启用/禁用状态"""
-        if not self.is_admin:
-            self.tray_manager.show_message(
-                "权限不足",
-                "需要管理员权限才能使用此功能",
-                2
-            )
-            return
-        
         self.enabled = not self.enabled
         self.tray_manager.update_icon(self.enabled)
         
@@ -130,7 +120,11 @@ class MeowParser(QObject):
             
             self.debug_log("输入监听已启动")
         except Exception as e:
-            self.tray_manager.show_message("错误", f"启动失败: {str(e)}", 2)
+            self.tray_manager.show_message(
+                "错误", 
+                f"启动失败: {str(e)}", 
+                QSystemTrayIcon.MessageIcon.Critical
+            )
     
     def stop_input_listener(self):
         """停止输入监听"""
@@ -181,12 +175,35 @@ class MeowParser(QObject):
         
         # 检查窗口是否在白名单中
         window_key = window['title']
-        if window_key not in self.allowed_windows or not self.allowed_windows[window_key]:
+        window_config = self.allowed_windows.get(window_key)
+        
+        # 兼容旧格式和新格式
+        if not window_config:
             self.input_buffer = ""
             self.input_activated = False
             if self.floating_window.isVisible():
                 self.floating_window.hide()
             return
+        
+        # 转换为字典格式
+        if not isinstance(window_config, dict):
+            window_config = {"enabled": window_config}
+            self.allowed_windows[window_key] = window_config
+        
+        # 检查是否启用
+        if not window_config.get("enabled", False):
+            self.input_buffer = ""
+            self.input_activated = False
+            if self.floating_window.isVisible():
+                self.floating_window.hide()
+            return
+        
+        # 获取窗口配置
+        trigger_key = window_config.get("trigger_key", "").lower()
+        direct_input = window_config.get("direct_input", False)
+        
+        # 保存直接输入模式到窗口对象
+        window['direct_input'] = direct_input
         
         # 检测窗口切换
         if self.last_window != window_key:
@@ -224,9 +241,21 @@ class MeowParser(QObject):
         
         # 处理空格 - 在输入激活状态下触发悬浮窗
         if key_name == 'space':
-            if self.input_activated and not floating_visible:
-                self.input_buffer = ""
-                
+            # 检查是否满足触发条件
+            should_trigger = False
+            
+            if trigger_key:
+                # 自定义触发器：检查缓冲区是否以触发键结尾
+                if self.input_buffer.lower().endswith(trigger_key):
+                    should_trigger = True
+                    # 移除触发键
+                    self.input_buffer = self.input_buffer[:-len(trigger_key)]
+            else:
+                # 默认触发器：任何输入后按空格
+                if self.input_activated:
+                    should_trigger = True
+            
+            if should_trigger and not floating_visible:
                 # 获取当前鼠标位置
                 try:
                     if IS_WINDOWS:
@@ -239,8 +268,8 @@ class MeowParser(QObject):
                 
                 # 显示悬浮窗
                 x, y = self.click_position
-                self.debug_log(f"显示悬浮窗: 位置({x}, {y})")
-                self.floating_window.show_at(x, y, window.get('hwnd'))
+                self.debug_log(f"显示悬浮窗: 位置({x}, {y}), 触发器: {trigger_key or '空格'}")
+                self.floating_window.show_at(x, y, window.get('hwnd'), direct_input)
                 
                 # 阻止空格键事件传递
                 try:
@@ -319,7 +348,7 @@ class MeowParser(QObject):
                 self.tray_manager.show_message(
                     "无法切换",
                     "无法获取当前窗口信息",
-                    2
+                    QSystemTrayIcon.MessageIcon.Critical
                 )
                 return
             
@@ -330,16 +359,28 @@ class MeowParser(QObject):
                 self.tray_manager.show_message(
                     "无法切换",
                     "调试窗口已锁定为启用状态",
-                    1
+                    QSystemTrayIcon.MessageIcon.Information
                 )
                 return
             
             # 切换状态
-            if window_key in self.allowed_windows and self.allowed_windows[window_key]:
-                del self.allowed_windows[window_key]
+            window_config = self.allowed_windows.get(window_key)
+            
+            # 兼容旧格式
+            if window_config and not isinstance(window_config, dict):
+                window_config = {"enabled": window_config}
+                self.allowed_windows[window_key] = window_config
+            
+            if window_config and window_config.get("enabled", False):
+                # 禁用窗口
+                window_config["enabled"] = False
                 status = "已禁用"
             else:
-                self.allowed_windows[window_key] = True
+                # 启用窗口
+                if not window_config:
+                    self.allowed_windows[window_key] = {"enabled": True}
+                else:
+                    window_config["enabled"] = True
                 status = "已启用"
             
             self.save_window_settings()
@@ -353,7 +394,7 @@ class MeowParser(QObject):
             self.tray_manager.show_message(
                 f"窗口{status}",
                 f"{display_title}",
-                1
+                QSystemTrayIcon.MessageIcon.Information
             )
             
             self.debug_log(f"快捷键切换窗口状态: {window_key} -> {status}")
@@ -367,7 +408,7 @@ class MeowParser(QObject):
             self.tray_manager.show_message(
                 "切换失败",
                 f"错误: {str(e)}",
-                2
+                QSystemTrayIcon.MessageIcon.Critical
             )
     
     def _add_debug_window_to_whitelist(self):
@@ -388,7 +429,7 @@ class MeowParser(QObject):
                             _, pid = win32process.GetWindowThreadProcessId(hwnd)
                             process_name = psutil.Process(pid).name()
                             window_key = f"{process_name} - {title}"
-                            self.allowed_windows[window_key] = True
+                            self.allowed_windows[window_key] = {"enabled": True}
                             self.save_window_settings()
                             self.debug_log(f"已自动添加调试窗口到白名单: {window_key}")
                     except:
@@ -407,7 +448,7 @@ class MeowParser(QObject):
                             if len(parts) >= 4:
                                 title = parts[3]
                                 window_key = f"Python - {title}"
-                                self.allowed_windows[window_key] = True
+                                self.allowed_windows[window_key] = {"enabled": True}
                                 self.save_window_settings()
                                 self.debug_log(f"已自动添加调试窗口到白名单: {window_key}")
                                 break
@@ -524,6 +565,42 @@ class MeowParser(QObject):
         if self.config_manager.current_config:
             config_name = self.config_manager.current_config.get('name', '')
             self.debug_log(f"配置已更新: {config_name}")
+    
+    def change_theme(self, theme_mode: str):
+        """切换主题"""
+        try:
+            app = QApplication.instance()
+            self.style_manager.set_theme(theme_mode, app)
+            self.tray_manager.update_theme_menu()
+            
+            # 显示通知
+            theme_names = {
+                "auto": "自动（跟随系统）",
+                "dark": "深色",
+                "light": "浅色"
+            }
+            effective_theme = self.style_manager.get_current_effective_theme()
+            effective_name = "深色" if effective_theme == "dark" else "浅色"
+            
+            if theme_mode == "auto":
+                message = f"已切换到自动模式（当前: {effective_name}）"
+            else:
+                message = f"已切换到{theme_names[theme_mode]}主题"
+            
+            self.tray_manager.show_message(
+                "主题已切换", 
+                message, 
+                QSystemTrayIcon.MessageIcon.Information
+            )
+            self.debug_log(f"主题已切换: {theme_mode}")
+            
+        except Exception as e:
+            self.debug_log(f"切换主题错误: {e}")
+            self.tray_manager.show_message(
+                "切换失败", 
+                f"错误: {str(e)}", 
+                QSystemTrayIcon.MessageIcon.Critical
+            )
     
     def quit_app(self):
         """退出应用"""

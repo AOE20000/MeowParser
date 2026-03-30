@@ -50,13 +50,19 @@ Thumbs.db
 *.json.backup
 *.json.bak
 *.json.old
-*.lock
 
 # Logs
 *.log
 
-# User data
+# User data (runtime generated)
 .meowparser/window_settings.json
+.meowparser/theme_settings.json
 .meowparser/instance.lock
+
+# Legacy config files (auto-migrated)
 window_settings.json
 replacement_rules.json
+
+# Test output
+tests/__pycache__/
+tests/*.pyc

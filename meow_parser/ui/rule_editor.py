@@ -64,6 +64,7 @@ class ReplacementRuleEditor(QWidget):
         self.group_list.setColumnWidth(1, 50)
         self.group_list.itemClicked.connect(self.on_group_selected)
         self.group_list.itemDoubleClicked.connect(self.toggle_group)
+        
         left_panel.addWidget(self.group_list)
         
         # 规则组按钮
@@ -109,6 +110,9 @@ class ReplacementRuleEditor(QWidget):
         self.tree.setColumnWidth(1, 180)
         self.tree.setColumnWidth(2, 180)
         self.tree.setColumnWidth(3, 80)
+        
+        # 应用树形控件主题
+        
         right_panel.addWidget(self.tree)
         
         # 规则按钮
