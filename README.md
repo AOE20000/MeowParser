@@ -1,4 +1,4 @@
-![图片描述](./MeowParser)
+![图片描述](./MeowParser.jpg)
 # MeowParser - 喵语解析器
 
 即时文本处理工具，通过输入焦点劫持和悬浮窗中转实现量产猫娘
